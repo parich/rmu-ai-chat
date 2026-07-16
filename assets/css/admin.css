@@ -1,0 +1,7 @@
+.toplevel_page_rmu-ai-chat .form-table th {
+	width: 280px;
+}
+
+.toplevel_page_rmu-ai-chat select[multiple] {
+	display: block;
+}
