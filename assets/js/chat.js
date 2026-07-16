@@ -163,6 +163,156 @@
 		return bubble;
 	}
 
+	// --- Action buttons (copy / like / dislike) ใต้คำตอบ bot ---
+
+	var ICONS = {
+		copy:
+			'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+		check:
+			'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+		thumbsUp:
+			'<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>',
+		thumbsDown:
+			'<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>',
+	};
+
+	function copyText( text, done ) {
+		function legacyCopy() {
+			var ta = document.createElement( 'textarea' );
+			ta.value = text;
+			ta.style.position = 'fixed';
+			ta.style.opacity = '0';
+			document.body.appendChild( ta );
+			ta.select();
+			var ok = false;
+			try {
+				ok = document.execCommand( 'copy' );
+			} catch ( e ) {
+				ok = false;
+			}
+			ta.remove();
+			done( ok );
+		}
+		// เว็บที่เสิร์ฟผ่าน http (ไม่ใช่ secure context) จะไม่มี navigator.clipboard — fallback ไป execCommand
+		if ( navigator.clipboard && window.isSecureContext ) {
+			navigator.clipboard.writeText( text ).then(
+				function () {
+					done( true );
+				},
+				legacyCopy
+			);
+		} else {
+			legacyCopy();
+		}
+	}
+
+	function sendFeedback( messageId, rating, content ) {
+		var headers = { 'Content-Type': 'application/json' };
+		if ( config.nonce ) {
+			headers['X-WP-Nonce'] = config.nonce;
+		}
+		return fetch( config.restFeedbackUrl, {
+			method: 'POST',
+			headers: headers,
+			credentials: 'same-origin',
+			body: JSON.stringify( {
+				message_id: messageId,
+				rating: rating || '',
+				content: content || '',
+				guest_id: getGuestId(),
+			} ),
+		} ).then( function ( res ) {
+			return res.json().then( function ( data ) {
+				return { ok: res.ok && ! data.error, data: data };
+			} );
+		} );
+	}
+
+	function iconButton( icon, label ) {
+		var btn = document.createElement( 'button' );
+		btn.type = 'button';
+		btn.className = 'rmu-aic-action';
+		btn.setAttribute( 'aria-label', label );
+		btn.title = label;
+		btn.innerHTML = icon;
+		return btn;
+	}
+
+	function attachActions( text, messageId ) {
+		var row = document.createElement( 'div' );
+		row.className = 'rmu-aic-actions';
+
+		var copyBtn = iconButton( ICONS.copy, config.i18n.copy );
+		copyBtn.addEventListener( 'click', function () {
+			copyText( text, function ( ok ) {
+				copyBtn.innerHTML = ok ? ICONS.check : ICONS.copy;
+				copyBtn.title = ok ? config.i18n.copied : config.i18n.copyFail;
+				setTimeout( function () {
+					copyBtn.innerHTML = ICONS.copy;
+					copyBtn.title = config.i18n.copy;
+				}, 1500 );
+			} );
+		} );
+		row.appendChild( copyBtn );
+
+		if ( messageId ) {
+			var likeBtn = iconButton( ICONS.thumbsUp, config.i18n.like );
+			var dislikeBtn = iconButton( ICONS.thumbsDown, config.i18n.dislike );
+			var rating = null;
+			var pending = false;
+
+			function paint() {
+				likeBtn.classList.toggle( 'is-active-like', 'like' === rating );
+				dislikeBtn.classList.toggle( 'is-active-dislike', 'dislike' === rating );
+			}
+
+			function handleRating( clicked ) {
+				if ( pending ) {
+					return;
+				}
+				// กดซ้ำ rating เดิม = ยกเลิก — อัปเดต UI ก่อน แล้ว revert ถ้า server ตอบ error
+				var prev = rating;
+				rating = rating === clicked ? null : clicked;
+				paint();
+				pending = true;
+				sendFeedback( messageId, rating )
+					.then( function ( result ) {
+						if ( ! result.ok ) {
+							rating = prev;
+							paint();
+							return;
+						}
+						// ถามรายละเอียดเพิ่มเฉพาะตอนกด dislike (ไม่บังคับ) — ส่งซ้ำพร้อม content ให้ Dify อัปเดต feedback เดิม
+						if ( 'dislike' === rating ) {
+							var comment = window.prompt( config.i18n.dislikePrompt, '' );
+							if ( comment && comment.trim() ) {
+								sendFeedback( messageId, 'dislike', comment.trim().slice( 0, 500 ) );
+							}
+						}
+					} )
+					.catch( function () {
+						rating = prev;
+						paint();
+					} )
+					.finally( function () {
+						pending = false;
+					} );
+			}
+
+			likeBtn.addEventListener( 'click', function () {
+				handleRating( 'like' );
+			} );
+			dislikeBtn.addEventListener( 'click', function () {
+				handleRating( 'dislike' );
+			} );
+			row.appendChild( likeBtn );
+			row.appendChild( dislikeBtn );
+		}
+
+		messages.appendChild( row );
+		messages.scrollTop = messages.scrollHeight;
+	}
+
 	function handleSend() {
 		if ( sending ) {
 			return;
@@ -228,6 +378,7 @@
 				conversationId = data.conversation_id || conversationId;
 				safeSet( STORAGE_CONVERSATION, conversationId );
 				appendMessage( 'bot', data.answer || '' );
+				attachActions( data.answer || '', data.message_id || '' );
 			} )
 			.catch( function () {
 				typing.remove();

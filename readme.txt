@@ -4,7 +4,7 @@ Tags: chat, ai, dify, chatbot
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,6 +32,11 @@ API Key ของ Dify ถูกเก็บและเรียกใช้เ
 3. ไปที่เมนู "RMU AI Chat" กรอก Dify API URL และ API Key แล้วบันทึก
 
 == Changelog ==
+
+= 1.1.0 =
+* เพิ่มปุ่ม Like / Dislike / คัดลอกคำตอบ ใต้ข้อความตอบกลับของ bot (feedback ส่งเข้า Dify)
+* ตอนกด Dislike ถามความเห็นเพิ่มเติมแบบไม่บังคับ
+* endpoint ใหม่: POST /wp-json/rmu-ai-chat/v1/feedback (มี rate limit แยกจากข้อความแชท)
 
 = 1.0.1 =
 * เพิ่มปุ่ม "ทดสอบการเชื่อมต่อ Dify" ในหน้า settings เพื่อดู error จริงตอนเชื่อมต่อ Dify ไม่สำเร็จ

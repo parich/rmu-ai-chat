@@ -110,4 +110,67 @@ class RMU_AI_Chat_Dify_Client {
 			'message_id'      => isset( $data['message_id'] ) ? (string) $data['message_id'] : '',
 		);
 	}
+
+	/**
+	 * ส่ง feedback (like/dislike/ยกเลิก) ต่อคำตอบ — Dify ตรวจความเป็นเจ้าของจาก user param เอง
+	 *
+	 * @param string      $message_id message id ฝั่ง Dify
+	 * @param string      $user       identity เดียวกับตอนส่งข้อความ
+	 * @param string|null $rating     'like' | 'dislike' | null (null = ยกเลิก feedback เดิม)
+	 * @param string      $content    ความเห็นประกอบ (ไม่บังคับ)
+	 * @return array{ok:bool,error?:string}
+	 */
+	public function send_feedback( $message_id, $user, $rating, $content = '' ) {
+		if ( empty( $this->base_url ) || empty( $this->api_key ) ) {
+			return array(
+				'ok'    => false,
+				'error' => __( 'ยังไม่ได้ตั้งค่า Dify API — กรุณาตั้งค่าที่หน้า Admin ก่อนใช้งาน', 'rmu-ai-chat' ),
+			);
+		}
+
+		$body = array(
+			'rating' => $rating,
+			'user'   => $user,
+		);
+		if ( '' !== $content ) {
+			$body['content'] = $content;
+		}
+
+		$response = wp_remote_post(
+			$this->base_url . '/messages/' . rawurlencode( $message_id ) . '/feedbacks',
+			array(
+				'timeout' => self::READ_TIMEOUT_SEC,
+				'headers' => array(
+					'Authorization' => 'Bearer ' . $this->api_key,
+					'Content-Type'  => 'application/json',
+				),
+				'body'    => wp_json_encode( $body ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			error_log(
+				sprintf(
+					'[rmu-ai-chat] feedback wp_remote_post ล้มเหลว (%s): %s',
+					$response->get_error_code(),
+					$response->get_error_message()
+				)
+			);
+			return array(
+				'ok'    => false,
+				'error' => __( 'ไม่สามารถบันทึก feedback ได้', 'rmu-ai-chat' ),
+			);
+		}
+
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status ) {
+			error_log( sprintf( '[rmu-ai-chat] feedback Dify HTTP %d: %s', $status, mb_substr( wp_remote_retrieve_body( $response ), 0, 300 ) ) );
+			return array(
+				'ok'    => false,
+				'error' => __( 'ไม่สามารถบันทึก feedback ได้', 'rmu-ai-chat' ),
+			);
+		}
+
+		return array( 'ok' => true );
+	}
 }

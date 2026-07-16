@@ -75,13 +75,14 @@ class RMU_AI_Chat_Widget {
 			'rmu-ai-chat-frontend',
 			'rmuAiChatConfig',
 			array(
-				'restUrl'        => esc_url_raw( rest_url( 'rmu-ai-chat/v1/message' ) ),
-				'nonce'          => wp_create_nonce( 'wp_rest' ),
-				'isLoggedIn'     => is_user_logged_in(),
-				'chatTitle'      => $options['chat_title'],
-				'greeting'       => $options['greeting_message'],
-				'inputMaxLength' => (int) $options['input_max_length'],
-				'i18n'           => array(
+				'restUrl'         => esc_url_raw( rest_url( 'rmu-ai-chat/v1/message' ) ),
+				'restFeedbackUrl' => esc_url_raw( rest_url( 'rmu-ai-chat/v1/feedback' ) ),
+				'nonce'           => wp_create_nonce( 'wp_rest' ),
+				'isLoggedIn'      => is_user_logged_in(),
+				'chatTitle'       => $options['chat_title'],
+				'greeting'        => $options['greeting_message'],
+				'inputMaxLength'  => (int) $options['input_max_length'],
+				'i18n'            => array(
 					'placeholder'    => __( 'พิมพ์ข้อความ…', 'rmu-ai-chat' ),
 					'send'           => __( 'ส่ง', 'rmu-ai-chat' ),
 					'thinking'       => __( 'กำลังพิมพ์…', 'rmu-ai-chat' ),
@@ -89,6 +90,12 @@ class RMU_AI_Chat_Widget {
 					'newConversation' => __( 'เริ่มบทสนทนาใหม่', 'rmu-ai-chat' ),
 					'close'          => __( 'ปิด', 'rmu-ai-chat' ),
 					'open'           => __( 'เปิดแชท', 'rmu-ai-chat' ),
+					'copy'           => __( 'คัดลอกคำตอบ', 'rmu-ai-chat' ),
+					'copied'         => __( 'คัดลอกแล้ว', 'rmu-ai-chat' ),
+					'copyFail'       => __( 'คัดลอกไม่สำเร็จ', 'rmu-ai-chat' ),
+					'like'           => __( 'คำตอบมีประโยชน์', 'rmu-ai-chat' ),
+					'dislike'        => __( 'คำตอบไม่ถูกต้อง/ไม่มีประโยชน์', 'rmu-ai-chat' ),
+					'dislikePrompt'  => __( 'อยากบอกเพิ่มเติมไหมว่าคำตอบมีปัญหาอย่างไร (เว้นว่างได้)', 'rmu-ai-chat' ),
 				),
 			)
 		);

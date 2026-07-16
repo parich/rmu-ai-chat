@@ -146,6 +146,52 @@
 	padding: 4px 12px;
 }
 
+.rmu-aic-actions {
+	align-self: flex-start;
+	display: flex;
+	gap: 2px;
+	margin: -4px 0 0 4px;
+}
+
+.rmu-aic-action {
+	background: transparent;
+	border: none;
+	border-radius: 6px;
+	padding: 4px;
+	cursor: pointer;
+	color: #9ca3af;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.rmu-aic-action:hover {
+	background: #e5e7eb;
+	color: #4b5563;
+}
+
+.rmu-aic-action svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+}
+
+.rmu-aic-action.is-active-like {
+	color: var(--rmu-aic-color, #0d6efd);
+}
+
+.rmu-aic-action.is-active-like svg {
+	fill: currentColor;
+}
+
+.rmu-aic-action.is-active-dislike {
+	color: #d63638;
+}
+
+.rmu-aic-action.is-active-dislike svg {
+	fill: currentColor;
+}
+
 .rmu-aic-input-row {
 	display: flex;
 	gap: 8px;

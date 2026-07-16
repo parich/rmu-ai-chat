@@ -15,6 +15,11 @@ class RMU_AI_Chat_REST_API {
 	// guest ต่อ IP อนุญาตมากกว่าต่อ guest เดี่ยวๆ ไม่งั้นผู้ใช้หลายคนหลัง NAT/wifi เดียวกัน (เช่นในมหาวิทยาลัย) จะโดนบล็อกไปด้วย
 	const IP_LIMIT_MULTIPLIER = 5;
 
+	// feedback ไม่เปลือง LLM — จำกัดแค่กันกดรัว ไม่ผูกกับ limit ของข้อความแชท
+	const FEEDBACK_LIMIT          = 30;
+	const FEEDBACK_WINDOW_SECONDS = 600;
+	const FEEDBACK_CONTENT_MAX    = 500;
+
 	/** @var RMU_AI_Chat_REST_API|null */
 	private static $instance = null;
 
@@ -52,6 +57,91 @@ class RMU_AI_Chat_REST_API {
 					),
 				),
 			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE_,
+			'/feedback',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'handle_feedback' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'message_id' => array(
+						'type'     => 'string',
+						'required' => true,
+					),
+					// '' = ยกเลิก feedback เดิม (Dify รับ rating: null)
+					'rating'     => array(
+						'type'     => 'string',
+						'required' => true,
+						'enum'     => array( 'like', 'dislike', '' ),
+					),
+					'content'    => array(
+						'type'     => 'string',
+						'required' => false,
+					),
+					'guest_id'   => array(
+						'type'     => 'string',
+						'required' => false,
+					),
+				),
+			)
+		);
+	}
+
+	public function handle_feedback( WP_REST_Request $request ) {
+		$options = RMU_AI_Chat_Settings::get_options();
+
+		if ( empty( $options['enabled'] ) ) {
+			return new WP_Error( 'rmu_aic_disabled', __( 'ระบบแชทปิดใช้งานอยู่', 'rmu-ai-chat' ), array( 'status' => 403 ) );
+		}
+
+		$message_id = sanitize_text_field( (string) $request->get_param( 'message_id' ) );
+		if ( '' === $message_id || mb_strlen( $message_id ) > 64 ) {
+			return new WP_Error( 'rmu_aic_bad_message_id', __( 'ไม่พบข้อความที่ต้องการให้ feedback', 'rmu-ai-chat' ), array( 'status' => 400 ) );
+		}
+
+		$rating_param = (string) $request->get_param( 'rating' );
+		$rating       = '' === $rating_param ? null : $rating_param;
+
+		$content = trim( sanitize_textarea_field( (string) $request->get_param( 'content' ) ) );
+		if ( mb_strlen( $content ) > self::FEEDBACK_CONTENT_MAX ) {
+			$content = mb_substr( $content, 0, self::FEEDBACK_CONTENT_MAX );
+		}
+
+		if ( is_user_logged_in() ) {
+			$dify_user = 'wp-user-' . get_current_user_id();
+		} else {
+			if ( empty( $options['guest_enabled'] ) ) {
+				return new WP_Error( 'rmu_aic_guest_disabled', __( 'กรุณาเข้าสู่ระบบก่อนใช้งานแชท', 'rmu-ai-chat' ), array( 'status' => 401 ) );
+			}
+			// ต้องเป็น guest_id เดิมที่เคยแชทเท่านั้น — ไม่สร้างใหม่ เพราะ identity ใหม่ย่อมไม่มีข้อความให้ feedback
+			$guest_id = sanitize_text_field( (string) $request->get_param( 'guest_id' ) );
+			if ( ! preg_match( '/^[a-zA-Z0-9-]{8,64}$/', $guest_id ) ) {
+				return new WP_Error( 'rmu_aic_no_identity', __( 'ไม่พบข้อมูลการสนทนา', 'rmu-ai-chat' ), array( 'status' => 400 ) );
+			}
+			$dify_user = 'wp-guest-' . $guest_id;
+		}
+
+		if ( ! RMU_AI_Chat_Rate_Limit::check( 'fb-' . $dify_user, self::FEEDBACK_LIMIT, self::FEEDBACK_WINDOW_SECONDS ) ) {
+			return new WP_Error( 'rmu_aic_rate_limited', __( 'คุณพยายามมากเกินไป กรุณารอสักครู่', 'rmu-ai-chat' ), array( 'status' => 429 ) );
+		}
+
+		$client = new RMU_AI_Chat_Dify_Client( $options['dify_api_url'], $options['dify_api_key'] );
+		$result = $client->send_feedback( $message_id, $dify_user, $rating, $content );
+
+		if ( empty( $result['ok'] ) ) {
+			return new WP_REST_Response( array( 'error' => $result['error'] ), 502 );
+		}
+
+		return new WP_REST_Response(
+			array(
+				'success' => null === $rating
+					? __( 'ยกเลิก feedback แล้ว', 'rmu-ai-chat' )
+					: __( 'ขอบคุณสำหรับ feedback', 'rmu-ai-chat' ),
+			),
+			200
 		);
 	}
 
