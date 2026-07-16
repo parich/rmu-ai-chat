@@ -26,6 +26,7 @@ class RMU_AI_Chat_Settings {
 		add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
+		add_action( 'wp_ajax_rmu_ai_chat_test_connection', array( $this, 'ajax_test_connection' ) );
 	}
 
 	/**
@@ -92,6 +93,71 @@ class RMU_AI_Chat_Settings {
 			RMU_AI_CHAT_VERSION,
 			true
 		);
+		wp_localize_script(
+			'rmu-ai-chat-admin',
+			'rmuAiChatAdmin',
+			array(
+				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+				'nonce'   => wp_create_nonce( 'rmu_ai_chat_test_connection' ),
+				'i18n'    => array(
+					'testing' => __( 'กำลังทดสอบ…', 'rmu-ai-chat' ),
+				),
+			)
+		);
+	}
+
+	/**
+	 * ทดสอบการเชื่อมต่อ Dify ด้วยค่าที่บันทึกไว้ล่าสุด (กด "บันทึกการตั้งค่า" ก่อนถึงจะทดสอบค่าใหม่ได้)
+	 * เรียก GET /parameters แทน /chat-messages เพื่อไม่ให้เสียโควตา/ค่าใช้จ่ายของ LLM แค่เช็คว่าเชื่อมต่อได้ไหม
+	 */
+	public function ajax_test_connection() {
+		check_ajax_referer( 'rmu_ai_chat_test_connection', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'ไม่มีสิทธิ์เข้าถึง', 'rmu-ai-chat' ) ), 403 );
+		}
+
+		$options = self::get_options();
+		if ( empty( $options['dify_api_url'] ) || empty( $options['dify_api_key'] ) ) {
+			wp_send_json_error( array( 'message' => __( 'กรุณากรอกและบันทึก Dify API URL/Key ก่อนทดสอบ', 'rmu-ai-chat' ) ) );
+		}
+
+		$response = wp_remote_get(
+			untrailingslashit( $options['dify_api_url'] ) . '/parameters?user=rmu-ai-chat-test-connection',
+			array(
+				'timeout' => 15,
+				'headers' => array( 'Authorization' => 'Bearer ' . $options['dify_api_key'] ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error(
+				array(
+					/* translators: 1: error code, 2: error message จาก WordPress HTTP API */
+					'message' => sprintf(
+						__( 'เชื่อมต่อไม่สำเร็จ: [%1$s] %2$s', 'rmu-ai-chat' ),
+						$response->get_error_code(),
+						$response->get_error_message()
+					),
+				)
+			);
+		}
+
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status ) {
+			wp_send_json_error(
+				array(
+					/* translators: 1: HTTP status code, 2: response body ที่ตัดให้สั้นลง */
+					'message' => sprintf(
+						__( 'Dify ตอบกลับ HTTP %1$d: %2$s', 'rmu-ai-chat' ),
+						$status,
+						mb_substr( wp_strip_all_tags( wp_remote_retrieve_body( $response ) ), 0, 200 )
+					),
+				)
+			);
+		}
+
+		wp_send_json_success( array( 'message' => __( 'เชื่อมต่อ Dify สำเร็จ', 'rmu-ai-chat' ) ) );
 	}
 
 	public function register_settings() {
@@ -344,6 +410,11 @@ class RMU_AI_Chat_Settings {
 				submit_button( __( 'บันทึกการตั้งค่า', 'rmu-ai-chat' ) );
 				?>
 			</form>
+			<hr />
+			<h2><?php esc_html_e( 'ทดสอบการเชื่อมต่อ Dify', 'rmu-ai-chat' ); ?></h2>
+			<p class="description"><?php esc_html_e( 'ทดสอบด้วยค่า Dify API URL/Key ที่บันทึกไว้ล่าสุด — ถ้าเพิ่งแก้ไข กรุณากด "บันทึกการตั้งค่า" ก่อน', 'rmu-ai-chat' ); ?></p>
+			<button type="button" class="button" id="rmu-aic-test-connection"><?php esc_html_e( 'ทดสอบการเชื่อมต่อ', 'rmu-ai-chat' ); ?></button>
+			<span id="rmu-aic-test-result" style="margin-left:10px;"></span>
 		</div>
 		<?php
 	}

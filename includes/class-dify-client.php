@@ -62,6 +62,15 @@ class RMU_AI_Chat_Dify_Client {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			// สาเหตุที่พบบ่อย: WP_HTTP_BLOCK_EXTERNAL เปิดอยู่แต่ไม่ได้เพิ่ม host ของ Dify ใน
+			// WP_ACCESSIBLE_HOSTS, firewall ของ server/เครือข่ายบล็อก outbound, หรือ SSL cert ของ Dify มีปัญหา
+			error_log(
+				sprintf(
+					'[rmu-ai-chat] wp_remote_post ล้มเหลว (%s): %s',
+					$response->get_error_code(),
+					$response->get_error_message()
+				)
+			);
 			return array(
 				'ok'    => false,
 				'error' => __( 'เชื่อมต่อระบบผู้ช่วย AI ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', 'rmu-ai-chat' ),
@@ -79,6 +88,7 @@ class RMU_AI_Chat_Dify_Client {
 					'error'                  => __( 'บทสนทนาเดิมหมดอายุ กรุณาเริ่มบทสนทนาใหม่', 'rmu-ai-chat' ),
 				);
 			}
+			error_log( sprintf( '[rmu-ai-chat] Dify HTTP %d: %s', $status, mb_substr( $raw, 0, 300 ) ) );
 			return array(
 				'ok'    => false,
 				'error' => __( 'ระบบผู้ช่วย AI ขัดข้อง กรุณาลองใหม่อีกครั้ง', 'rmu-ai-chat' ),
