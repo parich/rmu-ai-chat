@@ -32,6 +32,22 @@ class RMU_AI_Chat_REST_API {
 
 	private function __construct() {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+		// All-In-One WP Security: ฟีเจอร์ "Disallow unauthorized REST requests" จะ block ทุก route
+		// ที่ผู้เรียกไม่ได้ login ("You are not authorized to perform this action.") — endpoint แชท
+		// ตั้งใจเปิดให้ guest ใช้ (มี rate limit ของตัวเอง) จึง whitelist namespace ผ่าน filter ของ AIOS
+		add_filter( 'aios_whitelisted_rest_routes', array( $this, 'whitelist_in_aios' ) );
+	}
+
+	/**
+	 * @param mixed $routes รายการ namespace ที่ AIOS whitelist ไว้
+	 * @return array
+	 */
+	public function whitelist_in_aios( $routes ) {
+		$routes = is_array( $routes ) ? $routes : array();
+		if ( ! in_array( 'rmu-ai-chat', $routes, true ) ) {
+			$routes[] = 'rmu-ai-chat';
+		}
+		return $routes;
 	}
 
 	public function register_routes() {

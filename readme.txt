@@ -4,7 +4,7 @@ Tags: chat, ai, dify, chatbot
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,6 +32,10 @@ API Key ของ Dify ถูกเก็บและเรียกใช้เ
 3. ไปที่เมนู "RMU AI Chat" กรอก Dify API URL และ API Key แล้วบันทึก
 
 == Changelog ==
+
+= 1.1.1 =
+* แก้ guest ถูกบล็อกด้วยข้อความ "You are not authorized to perform this action." เมื่อเว็บเปิดฟีเจอร์
+  Disallow Unauthorized REST Requests ของ All-In-One WP Security — whitelist namespace ของปลั๊กอินอัตโนมัติ
 
 = 1.1.0 =
 * เพิ่มปุ่ม Like / Dislike / คัดลอกคำตอบ ใต้ข้อความตอบกลับของ bot (feedback ส่งเข้า Dify)

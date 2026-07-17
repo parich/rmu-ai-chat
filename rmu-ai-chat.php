@@ -3,7 +3,7 @@
  * Plugin Name:       RMU AI Chat
  * Plugin URI:        https://github.com/parich/rmu-ai-chat
  * Description:       แชทบอทผู้ช่วย AI (เชื่อมต่อ Dify) พร้อมไอคอนแชทลอยหน้าเว็บ ตั้งค่าได้ผ่านหน้า Admin
- * Version:           1.1.0
+ * Version:           1.1.1
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            RMU
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // ป้องกันการเรียกไฟล์ตรงจากภายนอก
 }
 
-define( 'RMU_AI_CHAT_VERSION', '1.1.0' );
+define( 'RMU_AI_CHAT_VERSION', '1.1.1' );
 define( 'RMU_AI_CHAT_FILE', __FILE__ );
 define( 'RMU_AI_CHAT_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RMU_AI_CHAT_URL', plugin_dir_url( __FILE__ ) );
