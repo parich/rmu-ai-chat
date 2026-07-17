@@ -29,6 +29,34 @@ class RMU_AI_Chat_GitHub_Updater {
 
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_update' ) );
 		add_filter( 'plugins_api', array( $this, 'plugin_info' ), 20, 3 );
+		add_action( 'upgrader_process_complete', array( $this, 'clear_cache_after_update' ), 10, 2 );
+	}
+
+	/**
+	 * ปุ่ม "ตรวจสอบอีกครั้ง" (/wp-admin/update-core.php?force-check=1) ล้างเฉพาะ transient ของ
+	 * WordPress core ไม่ใช่ cache ของเรา — ถ้าไม่ bypass ตรงนี้ ผู้ใช้กด force-check แล้ว
+	 * จะยังเห็นข้อมูล release เก่าค้างได้นานถึง 6 ชั่วโมง
+	 */
+	private function is_force_check() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- อ่านเพื่อตัดสินใจข้าม cache เท่านั้น
+		return is_admin() && isset( $_GET['force-check'] ) && current_user_can( 'update_plugins' );
+	}
+
+	/**
+	 * ล้าง cache หลังปลั๊กอินนี้ถูกอัปเดตสำเร็จ — ให้รอบตรวจถัดไปเห็นสถานะล่าสุดเสมอ
+	 *
+	 * @param WP_Upgrader $upgrader   instance ของตัวอัปเดต (ไม่ได้ใช้)
+	 * @param array       $hook_extra ข้อมูลว่าอะไรเพิ่งถูกอัปเดต
+	 */
+	public function clear_cache_after_update( $upgrader, $hook_extra ) {
+		if (
+			isset( $hook_extra['action'], $hook_extra['type'] )
+			&& 'update' === $hook_extra['action']
+			&& 'plugin' === $hook_extra['type']
+			&& in_array( $this->plugin_basename, isset( $hook_extra['plugins'] ) ? (array) $hook_extra['plugins'] : array(), true )
+		) {
+			delete_transient( $this->cache_key );
+		}
 	}
 
 	private function get_github_release() {
@@ -36,10 +64,12 @@ class RMU_AI_Chat_GitHub_Updater {
 			return $this->github_response;
 		}
 
-		$cached = get_transient( $this->cache_key );
-		if ( false !== $cached ) {
-			$this->github_response = $cached;
-			return $cached;
+		if ( ! $this->is_force_check() ) {
+			$cached = get_transient( $this->cache_key );
+			if ( false !== $cached ) {
+				$this->github_response = $cached;
+				return $cached;
+			}
 		}
 
 		$url      = "https://api.github.com/repos/{$this->github_owner}/{$this->github_repo}/releases/latest";
