@@ -71,6 +71,10 @@ class RMU_AI_Chat_REST_API {
 						'type'     => 'string',
 						'required' => false,
 					),
+					'consent'         => array(
+						'type'     => 'boolean',
+						'required' => false,
+					),
 				),
 			)
 		);
@@ -166,6 +170,17 @@ class RMU_AI_Chat_REST_API {
 
 		if ( empty( $options['enabled'] ) ) {
 			return new WP_Error( 'rmu_aic_disabled', __( 'ระบบแชทปิดใช้งานอยู่', 'rmu-ai-chat' ), array( 'status' => 403 ) );
+		}
+
+		// บังคับ consent ฝั่ง server ด้วย ไม่ใช่แค่ซ่อน/แสดง UI — กัน caller ที่ยิง REST endpoint ตรงๆ
+		// ข้ามหน้าประกาศความเป็นส่วนตัวไปเลย (เป็นแค่การเช็ค flag ที่ client ส่งมา ไม่ใช่ cryptographic
+		// proof แต่ทำให้ endpoint ปฏิเสธ request ที่ไม่ผ่าน UI ปกติแทนที่จะไม่เช็คอะไรเลยเหมือนเดิม)
+		if ( ! empty( $options['privacy_notice_enabled'] ) && empty( $request->get_param( 'consent' ) ) ) {
+			return new WP_Error(
+				'rmu_aic_consent_required',
+				__( 'กรุณายอมรับประกาศความเป็นส่วนตัวก่อนเริ่มแชท', 'rmu-ai-chat' ),
+				array( 'status' => 400 )
+			);
 		}
 
 		$message = trim( sanitize_textarea_field( (string) $request->get_param( 'message' ) ) );

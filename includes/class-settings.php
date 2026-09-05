@@ -48,7 +48,21 @@ class RMU_AI_Chat_Settings {
 			'greeting_message'       => 'สวัสดีค่ะ มีอะไรให้ช่วยเหลือไหมคะ?',
 			'guest_enabled'          => 1,
 			'excluded_pages'         => array(),
+			'privacy_notice_enabled' => 1,
+			'privacy_notice_title'   => 'ประกาศความเป็นส่วนตัว',
+			'privacy_notice_text'    => self::default_privacy_notice(),
+			'privacy_consent_label'  => 'ข้าพเจ้าได้อ่านและยินยอมรับทราบประกาศความเป็นส่วนตัวข้างต้นแล้ว',
+			'privacy_start_button'   => 'เริ่มการสนทนา',
 		);
+	}
+
+	/**
+	 * ข้อความประกาศความเป็นส่วนตัวตั้งต้น — แก้ไขได้จากหน้า Settings โดยไม่ต้องแตะโค้ด
+	 * ร่างตามข้อมูลจริงที่ระบบส่ง/เก็บ (ดู class-rest-api.php): ข้อความแชท, user id (login)
+	 * หรือ guest id แบบสุ่ม (ไม่ login), IP ใช้แค่จำกัดอัตราการส่ง — ไม่ส่งชื่อ/อีเมลไปที่ Dify
+	 */
+	private static function default_privacy_notice() {
+		return "แชทบอทผู้ช่วย AI นี้ให้บริการตอบคำถามเบื้องต้นเกี่ยวกับอีเมล, VPN และการยืนยันตัวตนของมหาวิทยาลัย โดยใช้ระบบประมวลผลภาษาที่มหาวิทยาลัยดูแลเอง (self-hosted) ไม่ส่งข้อมูลของท่านให้บุคคลภายนอก\n\nข้อมูลที่ระบบเก็บเมื่อท่านใช้งาน ได้แก่ ข้อความที่ท่านพิมพ์ในแชท, รหัสอ้างอิงการสนทนา (สร้างแบบสุ่มสำหรับผู้เยี่ยมชม หรือรหัสผู้ใช้งานกรณีเข้าสู่ระบบ) และหมายเลข IP ซึ่งใช้เพื่อจำกัดจำนวนข้อความในการป้องกันการใช้งานผิดปกติเท่านั้น\n\nข้อมูลเหล่านี้จะถูกใช้เพื่อตอบคำถามและปรับปรุงคุณภาพของระบบผู้ช่วย AI เท่านั้น\n\nกรุณาหลีกเลี่ยงการพิมพ์ข้อมูลส่วนบุคคลที่อ่อนไหว เช่น รหัสผ่าน, เลขบัตรประจำตัวประชาชน หรือข้อมูลทางการเงิน ผ่านช่องแชทนี้\n\nหากท่านมีข้อสงสัยเกี่ยวกับการคุ้มครองข้อมูลส่วนบุคคล สามารถติดต่อผู้ดูแลระบบของมหาวิทยาลัยได้";
 	}
 
 	/**
@@ -174,6 +188,7 @@ class RMU_AI_Chat_Settings {
 		add_settings_section( 'rmu_aic_section_connection', __( 'การเชื่อมต่อ Dify', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
 		add_settings_section( 'rmu_aic_section_limits', __( 'ขีดจำกัดการใช้งาน', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
 		add_settings_section( 'rmu_aic_section_display', __( 'การแสดงผล', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
+		add_settings_section( 'rmu_aic_section_privacy', __( 'ประกาศความเป็นส่วนตัวก่อนเริ่มแชท', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
 
 		add_settings_field( 'enabled', __( 'เปิดใช้งานแชท', 'rmu-ai-chat' ), array( $this, 'field_enabled' ), 'rmu-ai-chat', 'rmu_aic_section_connection' );
 		add_settings_field( 'dify_api_url', __( 'Dify API URL', 'rmu-ai-chat' ), array( $this, 'field_dify_api_url' ), 'rmu-ai-chat', 'rmu_aic_section_connection' );
@@ -190,6 +205,12 @@ class RMU_AI_Chat_Settings {
 		add_settings_field( 'icon_position', __( 'ตำแหน่งไอคอนแชท', 'rmu-ai-chat' ), array( $this, 'field_icon_position' ), 'rmu-ai-chat', 'rmu_aic_section_display' );
 		add_settings_field( 'icon_offset', __( 'ระยะห่างจากขอบจอ (px)', 'rmu-ai-chat' ), array( $this, 'field_icon_offset' ), 'rmu-ai-chat', 'rmu_aic_section_display' );
 		add_settings_field( 'excluded_pages', __( 'ไม่แสดงผลในหน้า (Page) เหล่านี้', 'rmu-ai-chat' ), array( $this, 'field_excluded_pages' ), 'rmu-ai-chat', 'rmu_aic_section_display' );
+
+		add_settings_field( 'privacy_notice_enabled', __( 'บังคับยอมรับก่อนเริ่มแชท', 'rmu-ai-chat' ), array( $this, 'field_privacy_notice_enabled' ), 'rmu-ai-chat', 'rmu_aic_section_privacy' );
+		add_settings_field( 'privacy_notice_title', __( 'หัวข้อประกาศ', 'rmu-ai-chat' ), array( $this, 'field_privacy_notice_title' ), 'rmu-ai-chat', 'rmu_aic_section_privacy' );
+		add_settings_field( 'privacy_notice_text', __( 'เนื้อหาประกาศความเป็นส่วนตัว', 'rmu-ai-chat' ), array( $this, 'field_privacy_notice_text' ), 'rmu-ai-chat', 'rmu_aic_section_privacy' );
+		add_settings_field( 'privacy_consent_label', __( 'ข้อความข้าง checkbox ยินยอม', 'rmu-ai-chat' ), array( $this, 'field_privacy_consent_label' ), 'rmu-ai-chat', 'rmu_aic_section_privacy' );
+		add_settings_field( 'privacy_start_button', __( 'ข้อความปุ่มเริ่มสนทนา', 'rmu-ai-chat' ), array( $this, 'field_privacy_start_button' ), 'rmu-ai-chat', 'rmu_aic_section_privacy' );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -227,6 +248,12 @@ class RMU_AI_Chat_Settings {
 
 		$excluded                 = isset( $input['excluded_pages'] ) && is_array( $input['excluded_pages'] ) ? $input['excluded_pages'] : array();
 		$output['excluded_pages'] = array_values( array_unique( array_map( 'absint', $excluded ) ) );
+
+		$output['privacy_notice_enabled'] = ! empty( $input['privacy_notice_enabled'] ) ? 1 : 0;
+		$output['privacy_notice_title']   = sanitize_text_field( $input['privacy_notice_title'] ?? '' );
+		$output['privacy_notice_text']    = sanitize_textarea_field( $input['privacy_notice_text'] ?? '' );
+		$output['privacy_consent_label']  = sanitize_text_field( $input['privacy_consent_label'] ?? '' );
+		$output['privacy_start_button']   = sanitize_text_field( $input['privacy_start_button'] ?? '' );
 
 		return $output;
 	}
@@ -390,6 +417,54 @@ class RMU_AI_Chat_Settings {
 			);
 		}
 		echo '</select><p class="description">' . esc_html__( 'กด Ctrl (หรือ Cmd บน Mac) ค้างไว้เพื่อเลือกหลายหน้า', 'rmu-ai-chat' ) . '</p>';
+	}
+
+	public function field_privacy_notice_enabled() {
+		$options = self::get_options();
+		printf(
+			'<label><input type="checkbox" name="%s" value="1" %s /> %s</label><p class="description">%s</p>',
+			esc_attr( $this->name( 'privacy_notice_enabled' ) ),
+			checked( 1, $options['privacy_notice_enabled'], false ),
+			esc_html__( 'แสดงประกาศให้ผู้ใช้ติ๊กยินยอมก่อนเริ่มแชทครั้งแรก', 'rmu-ai-chat' ),
+			esc_html__( 'ระบบจำการยินยอมไว้ที่เบราว์เซอร์ของผู้ใช้ (localStorage) ครั้งเดียวพอ ไม่ถามซ้ำทุกครั้งที่เปิดแชท', 'rmu-ai-chat' )
+		);
+	}
+
+	public function field_privacy_notice_title() {
+		$options = self::get_options();
+		printf(
+			'<input type="text" class="regular-text" name="%s" value="%s" />',
+			esc_attr( $this->name( 'privacy_notice_title' ) ),
+			esc_attr( $options['privacy_notice_title'] )
+		);
+	}
+
+	public function field_privacy_notice_text() {
+		$options = self::get_options();
+		printf(
+			'<textarea class="large-text" rows="12" name="%s">%s</textarea><p class="description">%s</p>',
+			esc_attr( $this->name( 'privacy_notice_text' ) ),
+			esc_textarea( $options['privacy_notice_text'] ),
+			esc_html__( 'ข้อความล้วน (ไม่รองรับ HTML) เว้นบรรทัดว่างเพื่อขึ้นย่อหน้าใหม่', 'rmu-ai-chat' )
+		);
+	}
+
+	public function field_privacy_consent_label() {
+		$options = self::get_options();
+		printf(
+			'<input type="text" class="large-text" name="%s" value="%s" />',
+			esc_attr( $this->name( 'privacy_consent_label' ) ),
+			esc_attr( $options['privacy_consent_label'] )
+		);
+	}
+
+	public function field_privacy_start_button() {
+		$options = self::get_options();
+		printf(
+			'<input type="text" class="regular-text" name="%s" value="%s" />',
+			esc_attr( $this->name( 'privacy_start_button' ) ),
+			esc_attr( $options['privacy_start_button'] )
+		);
 	}
 
 	/* ---------------------------------------------------------------------

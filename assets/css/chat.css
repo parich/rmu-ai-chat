@@ -28,6 +28,8 @@
 	align-items: center;
 	justify-content: center;
 	float: right;
+	box-sizing: border-box;
+	padding: 0;
 }
 
 #rmu-ai-chat-root.rmu-aic-left .rmu-aic-toggle {
@@ -37,6 +39,21 @@
 .rmu-aic-toggle svg {
 	width: 26px;
 	height: 26px;
+}
+
+/* มี mascot: เปลี่ยนพื้นหลังทึบเป็นวงแหวนสี ให้เห็นรูปเต็มวง */
+.rmu-aic-toggle.rmu-aic-has-mascot {
+	background: #fff;
+	border: 3px solid var(--rmu-aic-color, #0d6efd);
+}
+
+/* ใช้ซ้ำได้ทุกที่ที่ครอปรูป mascot เป็นวงกลมเต็มพื้นที่ container ของตัวเอง (ปุ่มลอย, รูปประจำตัวในหน้าประกาศ) */
+.rmu-aic-mascot {
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	object-fit: cover;
+	pointer-events: none;
 }
 
 .rmu-aic-panel {
@@ -66,6 +83,161 @@
 	display: flex;
 }
 
+/* หน้าประกาศความเป็นส่วนตัว — ใช้ตำแหน่ง/ขนาดกรอบแบบเดียวกับ .rmu-aic-panel แต่คุมการโชว์แยกกัน
+   เพื่อไม่ให้ทับซ้อนกับหน้าต่างแชทตอนเปิดครั้งแรก */
+.rmu-aic-consent {
+	position: absolute;
+	bottom: 72px;
+	width: 360px;
+	max-width: calc(100vw - 32px);
+	max-height: calc(100vh - 120px);
+	background: #fff;
+	border-radius: 12px;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+	display: none;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+#rmu-ai-chat-root.rmu-aic-right .rmu-aic-consent {
+	right: 0;
+}
+
+#rmu-ai-chat-root.rmu-aic-left .rmu-aic-consent {
+	left: 0;
+}
+
+#rmu-ai-chat-root.is-consent .rmu-aic-consent {
+	display: flex;
+}
+
+#rmu-ai-chat-root.is-open.is-consent .rmu-aic-panel {
+	display: none;
+}
+
+.rmu-aic-consent-close {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	background: transparent;
+	border: none;
+	color: #9ca3af;
+	cursor: pointer;
+	font-size: 22px;
+	line-height: 1;
+	padding: 4px;
+	z-index: 1;
+}
+
+.rmu-aic-consent-close:hover {
+	color: #4b5563;
+}
+
+.rmu-aic-consent-body {
+	flex: 1;
+	overflow-y: auto;
+	padding: 24px 20px 8px;
+	text-align: center;
+}
+
+.rmu-aic-consent-avatar {
+	width: 64px;
+	height: 64px;
+	margin: 0 auto 12px;
+	border-radius: 50%;
+	background: var(--rmu-aic-color, #0d6efd);
+	color: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+}
+
+.rmu-aic-consent-avatar.rmu-aic-has-mascot {
+	background: #fff;
+	border: 3px solid var(--rmu-aic-color, #0d6efd);
+}
+
+.rmu-aic-consent-avatar svg {
+	width: 30px;
+	height: 30px;
+}
+
+.rmu-aic-consent-body h3 {
+	margin: 0 0 4px;
+	font-size: 17px;
+	font-weight: 700;
+	color: #1f2328;
+}
+
+.rmu-aic-consent-body h4 {
+	margin: 0 0 10px;
+	font-size: 14px;
+	font-weight: 600;
+	color: #1f2328;
+}
+
+.rmu-aic-consent-text {
+	text-align: left;
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: #4b5563;
+	max-height: 220px;
+	overflow-y: auto;
+	padding: 10px;
+	border: 1px solid #e5e7eb;
+	border-radius: 8px;
+	background: #f9fafb;
+}
+
+.rmu-aic-consent-text p {
+	margin: 0 0 8px;
+}
+
+.rmu-aic-consent-text p:last-child {
+	margin-bottom: 0;
+}
+
+.rmu-aic-consent-footer {
+	flex-shrink: 0;
+	padding: 12px 20px 16px;
+	border-top: 1px solid #e5e7eb;
+	background: #fff;
+}
+
+.rmu-aic-consent-agree {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 13px;
+	color: #1f2328;
+	margin-bottom: 12px;
+	cursor: pointer;
+}
+
+.rmu-aic-consent-agree input {
+	margin-top: 2px;
+	accent-color: var(--rmu-aic-color, #0d6efd);
+	cursor: pointer;
+}
+
+.rmu-aic-consent-start {
+	width: 100%;
+	background: var(--rmu-aic-color, #0d6efd);
+	color: #fff;
+	border: none;
+	border-radius: 8px;
+	padding: 10px;
+	font-weight: 600;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.rmu-aic-consent-start:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
 .rmu-aic-header {
 	background: var(--rmu-aic-color, #0d6efd);
 	color: #fff;
@@ -76,11 +248,42 @@
 	flex-shrink: 0;
 }
 
+.rmu-aic-header-left {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.rmu-aic-header-avatar {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.25);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	box-sizing: border-box;
+}
+
+.rmu-aic-header-avatar.rmu-aic-has-mascot {
+	background: #fff;
+}
+
+.rmu-aic-header-avatar svg {
+	width: 18px;
+	height: 18px;
+}
+
 .rmu-aic-header h3 {
 	margin: 0;
 	font-size: 15px;
 	font-weight: 600;
 	color: #fff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .rmu-aic-close {
@@ -122,6 +325,50 @@
 	align-self: flex-start;
 	border-bottom-left-radius: 4px;
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.rmu-aic-msg.bot a {
+	color: var(--rmu-aic-color, #0d6efd);
+	text-decoration: underline;
+}
+
+.rmu-aic-msg.bot a:hover {
+	text-decoration: none;
+}
+
+/* บล็อก markdown อย่างง่ายจาก renderMarkdown() ใน chat.js — ย่อหน้า, list, หัวข้อ, ตัวหนา/เอียง */
+.rmu-aic-msg.bot p {
+	margin: 0 0 8px;
+}
+
+.rmu-aic-msg.bot ul,
+.rmu-aic-msg.bot ol {
+	margin: 0 0 8px;
+	padding-left: 20px;
+}
+
+.rmu-aic-msg.bot li {
+	margin-bottom: 4px;
+}
+
+.rmu-aic-msg.bot h3,
+.rmu-aic-msg.bot h4,
+.rmu-aic-msg.bot h5,
+.rmu-aic-msg.bot h6 {
+	margin: 0 0 6px;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.rmu-aic-msg.bot strong {
+	font-weight: 700;
+}
+
+.rmu-aic-msg.bot p:last-child,
+.rmu-aic-msg.bot ul:last-child,
+.rmu-aic-msg.bot ol:last-child,
+.rmu-aic-msg.bot li:last-child {
+	margin-bottom: 0;
 }
 
 .rmu-aic-msg.user {
@@ -241,7 +488,8 @@
 }
 
 @media (max-width: 480px) {
-	.rmu-aic-panel {
+	.rmu-aic-panel,
+	.rmu-aic-consent {
 		width: calc(100vw - 24px);
 	}
 }

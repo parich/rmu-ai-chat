@@ -54,7 +54,8 @@ class RMU_AI_Chat_Widget {
 			return;
 		}
 
-		$options = RMU_AI_Chat_Settings::get_options();
+		$options      = RMU_AI_Chat_Settings::get_options();
+		$mascot_poses = $this->get_mascot_poses();
 
 		wp_enqueue_style(
 			'rmu-ai-chat-frontend',
@@ -77,11 +78,16 @@ class RMU_AI_Chat_Widget {
 			array(
 				'restUrl'         => esc_url_raw( rest_url( 'rmu-ai-chat/v1/message' ) ),
 				'restFeedbackUrl' => esc_url_raw( rest_url( 'rmu-ai-chat/v1/feedback' ) ),
+				'mascotPoses'     => array_map( 'esc_url_raw', $mascot_poses ),
 				'nonce'           => wp_create_nonce( 'wp_rest' ),
 				'isLoggedIn'      => is_user_logged_in(),
 				'chatTitle'       => $options['chat_title'],
 				'greeting'        => $options['greeting_message'],
 				'inputMaxLength'  => (int) $options['input_max_length'],
+				'privacyEnabled'  => ! empty( $options['privacy_notice_enabled'] ),
+				'privacyTitle'    => $options['privacy_notice_title'],
+				// เนื้อหาเป็นข้อความล้วนใน DB — esc_html กัน HTML แปลกปลอมก่อน แล้ว wpautop ค่อยขึ้นย่อหน้า/บรรทัดใหม่ตอนแสดงผล
+				'privacyText'     => wpautop( esc_html( $options['privacy_notice_text'] ) ),
 				'i18n'            => array(
 					'placeholder'    => __( 'พิมพ์ข้อความ…', 'rmu-ai-chat' ),
 					'send'           => __( 'ส่ง', 'rmu-ai-chat' ),
@@ -96,6 +102,8 @@ class RMU_AI_Chat_Widget {
 					'like'           => __( 'คำตอบมีประโยชน์', 'rmu-ai-chat' ),
 					'dislike'        => __( 'คำตอบไม่ถูกต้อง/ไม่มีประโยชน์', 'rmu-ai-chat' ),
 					'dislikePrompt'  => __( 'อยากบอกเพิ่มเติมไหมว่าคำตอบมีปัญหาอย่างไร (เว้นว่างได้)', 'rmu-ai-chat' ),
+					'consentLabel'   => $options['privacy_consent_label'],
+					'startChat'      => $options['privacy_start_button'],
 				),
 			)
 		);
@@ -118,5 +126,40 @@ class RMU_AI_Chat_Widget {
 		</style>
 		<div id="rmu-ai-chat-root" class="rmu-aic-<?php echo esc_attr( $side ); ?>" aria-live="polite"></div>
 		<?php
+	}
+
+	/**
+	 * รูป mascot 4 ท่า (idle/welcome/listening/thinking) — คืน array เฉพาะท่าที่มีไฟล์จริงเท่านั้น
+	 * ท่าไหนไม่มีไฟล์จะเติมด้วย idle (หรือท่าแรกที่เจอ) แทน กัน JS พังถ้า asset ไม่ครบชุด
+	 * ไม่มีไฟล์เลยสักท่า = คืน array ว่าง แล้ว JS จะ fallback ไปไอคอนกรอบแชท SVG เดิม
+	 */
+	private function get_mascot_poses() {
+		$files = array(
+			'idle'      => '01_idle.png',
+			'welcome'   => '02_welcome.png',
+			'listening' => '03_listening.png',
+			'thinking'  => '04_thinking.png',
+		);
+
+		$poses = array();
+		foreach ( $files as $pose => $filename ) {
+			$path = RMU_AI_CHAT_DIR . 'assets/img/' . $filename;
+			if ( file_exists( $path ) ) {
+				$poses[ $pose ] = RMU_AI_CHAT_URL . 'assets/img/' . $filename;
+			}
+		}
+
+		if ( empty( $poses ) ) {
+			return array();
+		}
+
+		$fallback = isset( $poses['idle'] ) ? $poses['idle'] : reset( $poses );
+		foreach ( array_keys( $files ) as $pose ) {
+			if ( empty( $poses[ $pose ] ) ) {
+				$poses[ $pose ] = $fallback;
+			}
+		}
+
+		return $poses;
 	}
 }

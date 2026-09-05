@@ -3,6 +3,8 @@
 ปลั๊กอิน WordPress สำหรับแสดงไอคอนแชท AI ลอยหน้าเว็บ เชื่อมต่อกับ [Dify](https://dify.ai) Chat API
 API Key ของ Dify ถูกเรียกใช้เฉพาะฝั่ง server (PHP) เท่านั้น — frontend คุยกับ REST endpoint ของปลั๊กอินเองแทนที่จะยิงหา Dify ตรงๆ
 
+> ปลั๊กอินนี้เป็น 1 ใน 4 repo ของ RMU Chatbot Ecosystem (`dify` + `n8n` + `rmu-ai-chat` + `rmu-assist`) — เอกสาร topology และ integration contract ข้าม repo เก็บไว้ใน notes ส่วนตัวของทีมพัฒนา ไม่ได้อยู่ใน repo สาธารณะนี้
+
 ## Requirements
 
 - WordPress 5.8+
