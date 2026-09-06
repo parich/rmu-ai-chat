@@ -4,7 +4,7 @@ Tags: chat, ai, dify, chatbot
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,6 +32,9 @@ API Key ของ Dify ถูกเก็บและเรียกใช้เ
 3. ไปที่เมนู "RMU AI Chat" กรอก Dify API URL และ API Key แล้วบันทึก
 
 == Changelog ==
+
+= 1.3.1 =
+* แก้ลิงก์พัง: URL ที่ AI ห่อด้วย **ตัวหนา** (เช่น `**https://.../**`) เคยดึงเครื่องหมายปิดตัวหนาติดเข้าไปใน URL จริง ทำให้ลิงก์เปิดเว็บไม่ได้
 
 = 1.3.0 =
 * คำตอบของบอทรองรับ Markdown อย่างง่าย (ตัวหนา/ตัวเอียง, list, หัวข้อ, ลิงก์) แทนการแสดงสัญลักษณ์ดิบๆ — ใช้กับข้อความทักทายด้วย
