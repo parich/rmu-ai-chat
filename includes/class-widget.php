@@ -10,6 +10,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class RMU_AI_Chat_Widget {
 
+	/** ท่าของ mascot => ชื่อไฟล์ใน assets/img/ (ไม่รวมนามสกุล) */
+	const MASCOT_FILES = array(
+		'idle'      => '01_idle',
+		'welcome'   => '02_welcome',
+		'listening' => '03_listening',
+		'thinking'  => '04_thinking',
+		'searching' => '05_searching',
+	);
+
 	/** @var RMU_AI_Chat_Widget|null */
 	private static $instance = null;
 
@@ -79,6 +88,8 @@ class RMU_AI_Chat_Widget {
 				'restUrl'         => esc_url_raw( rest_url( 'rmu-ai-chat/v1/message' ) ),
 				'restFeedbackUrl' => esc_url_raw( rest_url( 'rmu-ai-chat/v1/feedback' ) ),
 				'mascotPoses'     => array_map( 'esc_url_raw', $mascot_poses ),
+				'teaser'          => ! empty( $options['teaser_enabled'] ) ? self::parse_teaser_messages( $options['teaser_messages'] ) : array(),
+				'teaserDelay'     => (int) $options['teaser_delay'] * 1000,
 				'nonce'           => wp_create_nonce( 'wp_rest' ),
 				'isLoggedIn'      => is_user_logged_in(),
 				'chatTitle'       => $options['chat_title'],
@@ -104,6 +115,8 @@ class RMU_AI_Chat_Widget {
 					'dislikePrompt'  => __( 'อยากบอกเพิ่มเติมไหมว่าคำตอบมีปัญหาอย่างไร (เว้นว่างได้)', 'rmu-ai-chat' ),
 					'consentLabel'   => $options['privacy_consent_label'],
 					'startChat'      => $options['privacy_start_button'],
+					'answerReady'    => __( 'ได้คำตอบแล้วค่ะ กดเพื่ออ่านได้เลย', 'rmu-ai-chat' ),
+					'dismiss'        => __( 'ปิดข้อความ', 'rmu-ai-chat' ),
 				),
 			)
 		);
@@ -129,23 +142,22 @@ class RMU_AI_Chat_Widget {
 	}
 
 	/**
-	 * รูป mascot 4 ท่า (idle/welcome/listening/thinking) — คืน array เฉพาะท่าที่มีไฟล์จริงเท่านั้น
+	 * รูป mascot 5 ท่า (idle/welcome/listening/thinking/searching) — คืน array เฉพาะท่าที่มีไฟล์จริงเท่านั้น
 	 * ท่าไหนไม่มีไฟล์จะเติมด้วย idle (หรือท่าแรกที่เจอ) แทน กัน JS พังถ้า asset ไม่ครบชุด
 	 * ไม่มีไฟล์เลยสักท่า = คืน array ว่าง แล้ว JS จะ fallback ไปไอคอนกรอบแชท SVG เดิม
+	 *
+	 * ใช้ .webp ที่ครอปแล้ว (สร้างจาก assets/img/src/ ด้วย tools/build-mascot.py) ก่อน ไม่มีค่อยใช้ .png
+	 * ที่วางไว้ตรงๆ — ต่อท้าย ?v=เวลาแก้ไฟล์ ให้เบราว์เซอร์โหลดรูปใหม่ทันทีที่สร้างไฟล์ใหม่ทับชื่อเดิม
 	 */
 	private function get_mascot_poses() {
-		$files = array(
-			'idle'      => '01_idle.png',
-			'welcome'   => '02_welcome.png',
-			'listening' => '03_listening.png',
-			'thinking'  => '04_thinking.png',
-		);
-
 		$poses = array();
-		foreach ( $files as $pose => $filename ) {
-			$path = RMU_AI_CHAT_DIR . 'assets/img/' . $filename;
-			if ( file_exists( $path ) ) {
-				$poses[ $pose ] = RMU_AI_CHAT_URL . 'assets/img/' . $filename;
+		foreach ( self::MASCOT_FILES as $pose => $basename ) {
+			foreach ( array( '.webp', '.png' ) as $ext ) {
+				$path = RMU_AI_CHAT_DIR . 'assets/img/' . $basename . $ext;
+				if ( file_exists( $path ) ) {
+					$poses[ $pose ] = RMU_AI_CHAT_URL . 'assets/img/' . $basename . $ext . '?v=' . filemtime( $path );
+					break;
+				}
 			}
 		}
 
@@ -154,12 +166,37 @@ class RMU_AI_Chat_Widget {
 		}
 
 		$fallback = isset( $poses['idle'] ) ? $poses['idle'] : reset( $poses );
-		foreach ( array_keys( $files ) as $pose ) {
+		foreach ( array_keys( self::MASCOT_FILES ) as $pose ) {
 			if ( empty( $poses[ $pose ] ) ) {
 				$poses[ $pose ] = $fallback;
 			}
 		}
 
 		return $poses;
+	}
+
+	/**
+	 * แปลงข้อความบอลลูนคำพูดจากหน้า Settings (หนึ่งข้อความต่อบรรทัด) เป็น [ { pose, text }, ... ]
+	 * นำหน้าบรรทัดด้วย [ชื่อท่า] เพื่อเลือกท่าของ mascot ได้ เช่น "[searching] ถามเรื่อง VPN ได้นะคะ" (ไม่ระบุ = ท่า welcome)
+	 * ตัดวงเล็บออกเฉพาะชื่อท่าที่มีจริงเท่านั้น — "[NEW] ระบบใหม่" หรือชื่อท่าที่สะกดผิดจะแสดงตามที่พิมพ์
+	 * ไม่ถูกตัดทิ้งเงียบๆ ผู้ดูแลจะได้เห็นว่าพิมพ์ผิดตรงไหน
+	 */
+	public static function parse_teaser_messages( $raw ) {
+		$messages = array();
+		foreach ( preg_split( '/\R/u', (string) $raw ) as $line ) {
+			$line = trim( $line );
+			$pose = 'welcome';
+			if ( preg_match( '/^\[([a-z]+)\]\s*(.*)$/iu', $line, $m ) && isset( self::MASCOT_FILES[ strtolower( $m[1] ) ] ) ) {
+				$pose = strtolower( $m[1] );
+				$line = trim( $m[2] );
+			}
+			if ( '' !== $line ) {
+				$messages[] = array(
+					'pose' => $pose,
+					'text' => $line,
+				);
+			}
+		}
+		return $messages;
 	}
 }

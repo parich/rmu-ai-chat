@@ -46,8 +46,35 @@ includes/
 assets/
   css/chat.css, js/chat.js   ไอคอนลอย + หน้าต่างแชท (vanilla JS, ไม่พึ่ง library)
   css/admin.css, js/admin.js สไตล์/สคริปต์เฉพาะหน้า settings (init wp-color-picker)
+  img/*.webp                 รูป mascot ที่ครอปแล้ว (สร้างจาก img/src/ ด้วย tools/build-mascot.py)
+  img/src/*.png              รูป mascot ต้นฉบับเต็มตัว (ไม่ถูกรวมใน zip release)
+tools/build-mascot.py        ครอป + แปลงรูป mascot เป็น WebP (ไม่ถูกรวมใน zip release)
 uninstall.php                ลบ option ตอนถอนการติดตั้งปลั๊กอิน
 ```
+
+### Mascot
+
+มี 5 ท่า — ชื่อไฟล์ผูกกับท่าไว้ใน `RMU_AI_Chat_Widget::MASCOT_FILES`:
+
+| ท่า | ไฟล์ | แสดงตอน |
+|---|---|---|
+| idle | `01_idle` | ปกติ |
+| welcome | `02_welcome` | เมาส์ชี้ปุ่มลอย, หน้าประกาศความเป็นส่วนตัว, เปิดแชทครั้งแรก, ได้คำตอบ |
+| listening | `03_listening` | ผู้ใช้กำลังพิมพ์ (focus ช่องพิมพ์) |
+| thinking | `04_thinking` | รอคำตอบนานเกิน 2.5 วินาที |
+| searching | `05_searching` | เริ่มรอคำตอบ |
+
+บอลลูนชวนคุยตั้งข้อความ ท่า และเวลารอก่อนขึ้นได้จากหน้า settings (หัวข้อ "Mascot และบอลลูนคำพูด")
+ขึ้นครั้งเดียวต่อแท็บ (`sessionStorage`) ถ้าผู้ใช้ปิดหน้าต่างแชทระหว่างรอคำตอบ mascot จะขึ้นบอลลูนเรียกกลับมาอ่าน
+
+**เปลี่ยนรูป mascot:** วาง PNG พื้นหลังโปร่งใสชื่อเดิมไว้ใน `assets/img/src/` แล้วรัน (ต้องมี Pillow + numpy):
+
+```bash
+python tools/build-mascot.py
+```
+
+สคริปต์จะครอปครึ่งตัวบนโดยจัดหน้าจอ (visor) ของหุ่นให้อยู่ตำแหน่งเดียวกันทุกท่า แล้วบันทึกเป็น
+`assets/img/*.webp` ขนาด 192px (ไฟล์ละ ~10 KB) — ถ้าไม่มีไฟล์ .webp ปลั๊กอินจะใช้ .png ใน `assets/img/` แทน
 
 ทุก config เก็บใน option เดียว: `rmu_ai_chat_options` (ดู `RMU_AI_Chat_Settings::default_options()`)
 

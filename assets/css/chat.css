@@ -41,10 +41,27 @@
 	height: 26px;
 }
 
-/* มี mascot: เปลี่ยนพื้นหลังทึบเป็นวงแหวนสี ให้เห็นรูปเต็มวง */
+/* มี mascot: เปลี่ยนพื้นหลังทึบเป็นวงแหวนสี ให้เห็นรูปเต็มวง
+   overflow: hidden กันรูปล้นวงแหวนตอนเล่น animation เด้ง (.is-pop) */
 .rmu-aic-toggle.rmu-aic-has-mascot {
 	background: #fff;
 	border: 3px solid var(--rmu-aic-color, #0d6efd);
+	overflow: hidden;
+}
+
+/* ลอยขึ้นลงเบาๆ เฉพาะตอนบอลลูนคำพูดแสดงอยู่ — ไม่ขยับตลอดเวลา (กดปิดบอลลูน = หยุด) */
+#rmu-ai-chat-root.has-bubble:not(.is-open) .rmu-aic-toggle.rmu-aic-has-mascot {
+	animation: rmu-aic-float 3s ease-in-out infinite;
+}
+
+@keyframes rmu-aic-float {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-4px);
+	}
 }
 
 /* ใช้ซ้ำได้ทุกที่ที่ครอปรูป mascot เป็นวงกลมเต็มพื้นที่ container ของตัวเอง (ปุ่มลอย, รูปประจำตัวในหน้าประกาศ) */
@@ -54,6 +71,163 @@
 	border-radius: 50%;
 	object-fit: cover;
 	pointer-events: none;
+}
+
+/* เด้งเบาๆ ตอนเปลี่ยนท่า (chat.js ใส่ class นี้ใน setImgPose) */
+.rmu-aic-mascot.is-pop {
+	animation: rmu-aic-pop 0.35s ease-out;
+}
+
+@keyframes rmu-aic-pop {
+	0% {
+		transform: scale(0.86);
+	}
+	60% {
+		transform: scale(1.06);
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+/* บอลลูนคำพูดของ mascot เหนือปุ่มลอย — width: max-content เพราะ root กว้างแค่ปุ่ม 56px
+   ถ้าปล่อย width อัตโนมัติ ข้อความจะถูกบีบให้ตัดบรรทัดตามความกว้างนั้น */
+.rmu-aic-bubble {
+	position: absolute;
+	bottom: 70px;
+	width: max-content;
+	max-width: min(260px, calc(100vw - 32px));
+	display: flex;
+	align-items: flex-start;
+	background: #fff;
+	color: #1f2328;
+	border-radius: 14px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(8px) scale(0.92);
+	transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+}
+
+#rmu-ai-chat-root.rmu-aic-right .rmu-aic-bubble {
+	right: 0;
+	transform-origin: calc(100% - 28px) 100%;
+}
+
+#rmu-ai-chat-root.rmu-aic-left .rmu-aic-bubble {
+	left: 0;
+	transform-origin: 28px 100%;
+}
+
+#rmu-ai-chat-root.has-bubble:not(.is-open) .rmu-aic-bubble {
+	opacity: 1;
+	visibility: visible;
+	transform: none;
+	transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s;
+}
+
+/* หางบอลลูนชี้ลงกลางปุ่มลอย (ปุ่มกว้าง 56px → กึ่งกลาง 28px ลบครึ่งหนึ่งของหาง 6px) */
+.rmu-aic-bubble::after {
+	content: "";
+	position: absolute;
+	bottom: -6px;
+	width: 12px;
+	height: 12px;
+	background: #fff;
+	transform: rotate(45deg);
+	box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.06);
+}
+
+#rmu-ai-chat-root.rmu-aic-right .rmu-aic-bubble::after {
+	right: 22px;
+}
+
+#rmu-ai-chat-root.rmu-aic-left .rmu-aic-bubble::after {
+	left: 22px;
+}
+
+.rmu-aic-bubble-text {
+	position: relative;
+	z-index: 1;
+	flex: 1;
+	min-width: 0;
+	min-height: 42px;
+	margin: 0;
+	padding: 10px 2px 10px 14px;
+	background: transparent;
+	border: none;
+	border-radius: 14px 0 0 14px;
+	color: inherit;
+	font: inherit;
+	font-size: 13.5px;
+	line-height: 1.55;
+	text-align: left;
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+/* กันธีมที่ใส่สไตล์ button:hover ทั้งเว็บ (specificity 0,1,1) มาทับพื้นหลังโปร่งใสของบอลลูน */
+.rmu-aic-bubble-text:hover,
+.rmu-aic-bubble-text:focus {
+	background: transparent;
+	color: inherit;
+}
+
+.rmu-aic-bubble-close {
+	position: relative;
+	z-index: 1;
+	flex-shrink: 0;
+	margin: 0;
+	padding: 8px 10px 8px 6px;
+	background: transparent;
+	border: none;
+	color: #9ca3af;
+	font-size: 18px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.rmu-aic-bubble-close:hover,
+.rmu-aic-bubble-close:focus {
+	background: transparent;
+	color: #4b5563;
+}
+
+/* จุดพิมพ์ ... ก่อนข้อความในบอลลูนขึ้น */
+.rmu-aic-bubble-dots {
+	display: inline-flex;
+	gap: 4px;
+	padding: 7px 0;
+	vertical-align: middle;
+}
+
+.rmu-aic-bubble-dots span {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #9ca3af;
+	animation: rmu-aic-dot 1s ease-in-out infinite;
+}
+
+.rmu-aic-bubble-dots span:nth-child(2) {
+	animation-delay: 0.15s;
+}
+
+.rmu-aic-bubble-dots span:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+@keyframes rmu-aic-dot {
+	0%,
+	60%,
+	100% {
+		opacity: 0.35;
+		transform: translateY(0);
+	}
+	30% {
+		opacity: 1;
+		transform: translateY(-3px);
+	}
 }
 
 .rmu-aic-panel {
@@ -156,6 +330,7 @@
 .rmu-aic-consent-avatar.rmu-aic-has-mascot {
 	background: #fff;
 	border: 3px solid var(--rmu-aic-color, #0d6efd);
+	overflow: hidden;
 }
 
 .rmu-aic-consent-avatar svg {
@@ -269,6 +444,7 @@
 
 .rmu-aic-header-avatar.rmu-aic-has-mascot {
 	background: #fff;
+	overflow: hidden;
 }
 
 .rmu-aic-header-avatar svg {
@@ -491,5 +667,18 @@
 	.rmu-aic-panel,
 	.rmu-aic-consent {
 		width: calc(100vw - 24px);
+	}
+}
+
+/* ผู้ใช้ตั้งค่าลดการเคลื่อนไหวไว้ที่ระบบ — ตัด animation ทั้งหมด เหลือแค่เปลี่ยนท่า/บอลลูนโผล่แบบจางเข้า */
+@media (prefers-reduced-motion: reduce) {
+	#rmu-ai-chat-root.has-bubble:not(.is-open) .rmu-aic-toggle.rmu-aic-has-mascot,
+	.rmu-aic-mascot.is-pop,
+	.rmu-aic-bubble-dots span {
+		animation: none;
+	}
+
+	#rmu-ai-chat-root .rmu-aic-bubble {
+		transform: none;
 	}
 }

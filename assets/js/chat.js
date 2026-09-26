@@ -9,6 +9,16 @@
 	var STORAGE_CONVERSATION = 'rmu_ai_chat_conversation_id';
 	var STORAGE_GUEST = 'rmu_ai_chat_guest_id';
 	var STORAGE_CONSENT = 'rmu_ai_chat_privacy_consent';
+	// sessionStorage (ไม่ใช่ localStorage) — บอลลูนชวนคุยขึ้นครั้งเดียวต่อแท็บ ไม่ใช่ครั้งเดียวตลอดไป
+	var STORAGE_TEASER = 'rmu_ai_chat_teaser_seen';
+
+	// รอหลังโหลดหน้าก่อนบอลลูนแรกขึ้น ตั้งได้จากหน้า Settings — wp_localize_script แปลงค่าชั้นบนสุดเป็น string เสมอ จึงต้อง parseInt
+	var TEASER_DELAY_MS = parseInt( config.teaserDelay, 10 ) || 0;
+	var TEASER_SHOW_MS = 6000; // เวลาที่แต่ละข้อความค้างอยู่ (หลังจุดพิมพ์หายไป)
+	var TEASER_GAP_MS = 600; // ช่วงว่างระหว่างข้อความ ให้ mascot กลับท่า idle ก่อนเปลี่ยนท่าใหม่
+	var BUBBLE_TYPING_MS = 900; // จุดพิมพ์ ... ก่อนข้อความขึ้น
+	var WAIT_THINKING_MS = 2500; // รอคำตอบนานเกินนี้ เปลี่ยนจากท่าค้นหาเป็นท่าคิด
+	var FLASH_MS = 1600; // ท่า welcome ชั่วคราวตอนเปิดแชทครั้งแรก/ตอนได้คำตอบ
 
 	var root = document.getElementById( 'rmu-ai-chat-root' );
 	if ( ! root ) {
@@ -33,6 +43,22 @@
 			window.localStorage.setItem( key, value );
 		} catch ( e ) {
 			/* localStorage อาจถูกปิดใน private mode — ไม่เป็นไร แค่ไม่จำ conversation ข้ามหน้า */
+		}
+	}
+
+	function sessionGet( key ) {
+		try {
+			return window.sessionStorage.getItem( key );
+		} catch ( e ) {
+			return null;
+		}
+	}
+
+	function sessionSet( key, value ) {
+		try {
+			window.sessionStorage.setItem( key, value );
+		} catch ( e ) {
+			/* จำไม่ได้ = บอลลูนชวนคุยอาจขึ้นซ้ำเมื่อเปลี่ยนหน้า ไม่กระทบการใช้งาน */
 		}
 	}
 
@@ -61,10 +87,11 @@
 
 	// --- DOM ---
 
-	// mascot 4 ท่า (idle/welcome/listening/thinking) — ถ้า asset ไม่ครบ ตัว PHP (class-widget.php)
+	// mascot 5 ท่า (idle/welcome/listening/thinking/searching) — ถ้า asset ไม่ครบ ตัว PHP (class-widget.php)
 	// จะเติมท่าที่ขาดด้วย idle ให้แล้ว ถ้าไม่มี mascot เลยจะได้ object ว่างมา แล้ว fallback เป็นไอคอน SVG เดิม
 	var mascotPoses = config.mascotPoses || {};
 	var hasMascot = !! mascotPoses.idle;
+	var teaser = config.teaser || [];
 
 	// คืน <img> ที่สลับท่าได้ (เก็บ reference ไว้ setPose ทีหลัง) หรือ <svg> ไอคอนเดิมถ้าไม่มี mascot
 	function buildMascotNode( pose ) {
@@ -87,8 +114,28 @@
 			return;
 		}
 		var url = mascotPoses[ pose ] || mascotPoses.idle;
-		if ( url && imgEl.src !== url ) {
-			imgEl.src = url;
+		if ( ! url || imgEl.getAttribute( 'src' ) === url ) {
+			return;
+		}
+		imgEl.src = url;
+		// เด้งเบาๆ ทุกครั้งที่เปลี่ยนท่า — ต้องถอด class แล้วบังคับ reflow ก่อนใส่คืน ไม่งั้น animation ไม่เล่นซ้ำ
+		imgEl.classList.remove( 'is-pop' );
+		void imgEl.offsetWidth;
+		imgEl.classList.add( 'is-pop' );
+	}
+
+	// โหลดรูปทุกท่ารอไว้หลังหน้าเว็บโหลดเสร็จ สลับท่าครั้งแรกจะได้ไม่ต้องรอดาวน์โหลด (ไฟล์ละ ~10 KB)
+	function preloadMascotPoses() {
+		Object.keys( mascotPoses ).forEach( function ( pose ) {
+			new Image().src = mascotPoses[ pose ];
+		} );
+	}
+
+	if ( hasMascot ) {
+		if ( 'complete' === document.readyState ) {
+			preloadMascotPoses();
+		} else {
+			window.addEventListener( 'load', preloadMascotPoses );
 		}
 	}
 
@@ -98,6 +145,27 @@
 	toggleBtn.setAttribute( 'aria-label', config.i18n.open );
 	var toggleMascotNode = buildMascotNode( 'idle' );
 	toggleBtn.appendChild( toggleMascotNode );
+
+	// --- บอลลูนคำพูดของ mascot เหนือปุ่มลอย (ข้อความชวนคุย / แจ้งว่าคำตอบมาแล้วตอนปิดหน้าต่างแชทอยู่) ---
+
+	var bubble = document.createElement( 'div' );
+	bubble.className = 'rmu-aic-bubble';
+
+	// ทั้งบอลลูนกดได้ = เปิดแชท จึงใช้ <button> ให้กด Tab/Enter ได้ด้วย ไม่ใช่แค่คลิกเมาส์
+	var bubbleText = document.createElement( 'button' );
+	bubbleText.type = 'button';
+	bubbleText.className = 'rmu-aic-bubble-text';
+
+	var bubbleClose = document.createElement( 'button' );
+	bubbleClose.type = 'button';
+	bubbleClose.className = 'rmu-aic-bubble-close';
+	bubbleClose.setAttribute( 'aria-label', config.i18n.dismiss );
+	bubbleClose.innerHTML = '&times;';
+
+	bubble.appendChild( bubbleText );
+	bubble.appendChild( bubbleClose );
+
+	var TYPING_DOTS = '<span class="rmu-aic-bubble-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
 
 	// --- หน้าประกาศความเป็นส่วนตัว (แสดงครั้งแรกก่อนเข้าแชท ถ้าเปิดใช้งานไว้) ---
 
@@ -166,7 +234,7 @@
 	var header = document.createElement( 'div' );
 	header.className = 'rmu-aic-header';
 
-	// รูปประจำตัวใน header สลับท่าไปตามสถานะการสนทนา (ดู setChatMascot ด้านล่าง)
+	// รูปประจำตัวใน header สลับท่าไปตามสถานะการสนทนา (ดู chatPose() ด้านล่าง)
 	var headerAvatar = document.createElement( 'div' );
 	headerAvatar.className = 'rmu-aic-header-avatar' + ( hasMascot ? ' rmu-aic-has-mascot' : '' );
 	var headerMascotNode = buildMascotNode( 'idle' );
@@ -219,21 +287,137 @@
 	// toggleBtn มาก่อนในลำดับ DOM ตั้งใจ — กด Tab ต่อจากปุ่มลอยแล้วต้องเข้าไปสู่ปุ่ม/ช่องใน panel
 	// ที่เปิดอยู่ทันที (consent หรือแชท) ไม่ใช่หลุดออกไปนอกวิดเจ็ต
 	root.appendChild( toggleBtn );
+	root.appendChild( bubble );
 	root.appendChild( consentPanel );
 	root.appendChild( panel );
 
 	updateCounter();
 
-	// --- Events ---
+	// --- ท่าของ mascot ---
+	// ไม่สั่งเปลี่ยนท่าตรงๆ จาก event แต่ละตัว — ทุก event แค่อัปเดตสถานะแล้วเรียก syncMascots()
+	// ให้ chatPose()/launcherPose() คำนวณท่าจากสถานะรวม ณ ตอนนั้น กันท่าค้างผิดเมื่อหลาย event ซ้อนกัน
 
-	// ตัวจัดการท่าของ mascot ใน header ให้ตรงกับสถานะการสนทนาจริง
-	function setChatMascot( pose ) {
-		setImgPose( headerMascotNode, pose );
+	var waitPose = 'searching'; // ท่าระหว่างรอคำตอบ: ค้นหาก่อน รอนานค่อยเปลี่ยนเป็นคิด
+	var waitTimer = null;
+	var chatFlashPose = null; // ท่าชั่วคราวใน header (welcome ตอนเปิดแชทครั้งแรก/ตอนได้คำตอบ)
+	var chatFlashTimer = null;
+	var bubblePose = null; // ท่าของบอลลูนที่กำลังแสดงอยู่ (null = ไม่มีบอลลูน)
+	var toggleInviting = false; // เมาส์ชี้/focus อยู่ที่ปุ่มลอย
+
+	function isOpen() {
+		return root.classList.contains( 'is-open' );
 	}
 
-	// true ระหว่างช่วงโชว์ท่า welcome ตอนเปิดแชทครั้งแรก — กัน textarea.focus() ยิง event
-	// 'focus' ทับท่าเป็น listening ทันทีก่อนผู้ใช้ทันเห็น welcome เลย
-	var welcomeTimer = null;
+	function chatPose() {
+		if ( sending ) {
+			return waitPose;
+		}
+		if ( chatFlashPose ) {
+			return chatFlashPose;
+		}
+		return document.activeElement === textarea ? 'listening' : 'idle';
+	}
+
+	function launcherPose() {
+		if ( toggleInviting ) {
+			return 'welcome';
+		}
+		if ( bubblePose ) {
+			return bubblePose;
+		}
+		// ปิดหน้าต่างแชทระหว่างรอคำตอบ — ให้ปุ่มลอยค้นหา/คิดแทน header ที่มองไม่เห็นแล้ว
+		if ( sending && ! isOpen() ) {
+			return waitPose;
+		}
+		return 'idle';
+	}
+
+	function syncMascots() {
+		setImgPose( headerMascotNode, chatPose() );
+		setImgPose( toggleMascotNode, launcherPose() );
+	}
+
+	function flashChatMascot( pose ) {
+		chatFlashPose = pose;
+		clearTimeout( chatFlashTimer );
+		chatFlashTimer = setTimeout( function () {
+			chatFlashPose = null;
+			syncMascots();
+		}, FLASH_MS );
+		syncMascots();
+	}
+
+	// --- บอลลูนคำพูด ---
+
+	var bubbleTimers = [];
+
+	function bubbleLater( fn, ms ) {
+		bubbleTimers.push( setTimeout( fn, ms ) );
+	}
+
+	function clearBubbleTimers() {
+		bubbleTimers.forEach( clearTimeout );
+		bubbleTimers = [];
+	}
+
+	// แทนที่บอลลูน/ลำดับข้อความชวนคุยที่ค้างอยู่ทั้งหมด (timer เก่าต้องไม่มาเขียนข้อความทับทีหลัง)
+	// แสดงจุดพิมพ์ ... สั้นๆ ก่อนแล้วค่อยขึ้นข้อความ ให้ความรู้สึกว่า mascot กำลังพิมพ์ตอบจริงๆ
+	function showBubble( text, pose ) {
+		clearBubbleTimers();
+		bubblePose = pose;
+		bubbleText.innerHTML = TYPING_DOTS;
+		root.classList.add( 'has-bubble' );
+		syncMascots();
+		bubbleLater( function () {
+			bubbleText.textContent = text;
+		}, BUBBLE_TYPING_MS );
+	}
+
+	// ซ่อนบอลลูนโดยไม่ยกเลิกลำดับข้อความที่ตั้งเวลาไว้ (ใช้ระหว่างข้อความชวนคุยแต่ละข้อความ)
+	function fadeBubble() {
+		bubblePose = null;
+		root.classList.remove( 'has-bubble' );
+		syncMascots();
+	}
+
+	function hideBubble() {
+		clearBubbleTimers();
+		fadeBubble();
+	}
+
+	// ผู้ใช้ตอบสนองกับบอลลูนแล้ว (เปิดแชท/กดปิด) — ไม่ต้องชวนคุยซ้ำอีกใน session นี้
+	function dismissBubble() {
+		sessionSet( STORAGE_TEASER, '1' );
+		hideBubble();
+	}
+
+	function runTeaser( index ) {
+		if ( index >= teaser.length ) {
+			hideBubble();
+			return;
+		}
+		// showBubble() ล้าง timer ทั้งหมดก่อน — ต้องเรียกก่อนตั้งเวลาข้อความถัดไปเสมอ
+		showBubble( teaser[ index ].text, teaser[ index ].pose );
+		bubbleLater( function () {
+			fadeBubble();
+			bubbleLater( function () {
+				runTeaser( index + 1 );
+			}, TEASER_GAP_MS );
+		}, BUBBLE_TYPING_MS + TEASER_SHOW_MS );
+	}
+
+	if ( teaser.length && ! sessionGet( STORAGE_TEASER ) ) {
+		bubbleLater( function () {
+			if ( isOpen() ) {
+				return;
+			}
+			// จำไว้ตั้งแต่ข้อความแรกขึ้น — เปลี่ยนหน้ากลางคันก็ไม่เริ่มลำดับใหม่ให้รำคาญ
+			sessionSet( STORAGE_TEASER, '1' );
+			runTeaser( 0 );
+		}, TEASER_DELAY_MS );
+	}
+
+	// --- Events ---
 
 	function openChat() {
 		root.classList.add( 'is-open' );
@@ -241,23 +425,10 @@
 		if ( ! greeted && config.greeting ) {
 			appendMessage( 'bot', config.greeting );
 			greeted = true;
-			setChatMascot( 'welcome' );
-			clearTimeout( welcomeTimer );
-			welcomeTimer = setTimeout( function () {
-				welcomeTimer = null;
-				// เช็คสถานะจริง ณ ตอนนั้นแทนที่จะยัด idle ดื้อๆ เผื่อผู้ใช้พิมพ์/ส่งข้อความไปแล้วระหว่างรอ
-				if ( sending ) {
-					setChatMascot( 'thinking' );
-				} else if ( document.activeElement === textarea ) {
-					setChatMascot( 'listening' );
-				} else {
-					setChatMascot( 'idle' );
-				}
-			}, 1600 );
-		} else {
-			setChatMascot( 'idle' );
+			flashChatMascot( 'welcome' );
 		}
 		textarea.focus();
+		syncMascots();
 	}
 
 	function openConsent() {
@@ -266,19 +437,35 @@
 		consentCheckbox.focus();
 	}
 
-	function closeWidget() {
-		root.classList.remove( 'is-open', 'is-consent' );
-	}
-
-	toggleBtn.addEventListener( 'click', function () {
-		if ( root.classList.contains( 'is-open' ) ) {
-			closeWidget();
-			return;
-		}
+	function openWidget() {
+		dismissBubble();
 		if ( consentGiven ) {
 			openChat();
 		} else {
 			openConsent();
+		}
+	}
+
+	function closeWidget() {
+		root.classList.remove( 'is-open', 'is-consent' );
+		syncMascots();
+	}
+
+	toggleBtn.addEventListener( 'click', function () {
+		if ( isOpen() ) {
+			closeWidget();
+			return;
+		}
+		openWidget();
+	} );
+
+	bubbleText.addEventListener( 'click', openWidget );
+
+	bubbleClose.addEventListener( 'click', function ( e ) {
+		dismissBubble();
+		// ปิดด้วยคีย์บอร์ด (detail = 0) ต้องคืน focus ให้ปุ่มลอย ไม่งั้น focus หายไปกับบอลลูนที่ซ่อนแล้ว
+		if ( 0 === e.detail ) {
+			toggleBtn.focus();
 		}
 	} );
 
@@ -299,36 +486,41 @@
 
 	closeBtn.addEventListener( 'click', closeWidget );
 
-	// ปุ่มลอย: ชวนคลิกด้วยท่า welcome ตอน hover/focus แล้วกลับ idle ตอนออก (no-op ถ้าไม่มี mascot)
+	// ปุ่มลอย: ชวนคลิกด้วยท่า welcome ตอน hover/focus แล้วกลับท่าเดิมตอนออก (no-op ถ้าไม่มี mascot)
+	function setToggleInviting( value ) {
+		toggleInviting = value;
+		syncMascots();
+	}
 	toggleBtn.addEventListener( 'mouseenter', function () {
-		setImgPose( toggleMascotNode, 'welcome' );
+		setToggleInviting( true );
 	} );
 	toggleBtn.addEventListener( 'mouseleave', function () {
-		setImgPose( toggleMascotNode, 'idle' );
+		setToggleInviting( false );
 	} );
 	toggleBtn.addEventListener( 'focus', function () {
-		setImgPose( toggleMascotNode, 'welcome' );
+		setToggleInviting( true );
 	} );
 	toggleBtn.addEventListener( 'blur', function () {
-		setImgPose( toggleMascotNode, 'idle' );
+		setToggleInviting( false );
 	} );
 
-	// กำลังพิมพ์อยู่ = ท่า listening, ออกจากช่องพิมพ์ = กลับ idle
-	// เว้นแต่กำลังรอคำตอบอยู่ (ปล่อยให้ thinking คุมแทน) หรือยังอยู่ในช่วงโชว์ท่า welcome ตอนเปิดแชทครั้งแรก
-	textarea.addEventListener( 'focus', function () {
-		if ( ! sending && ! welcomeTimer ) {
-			setChatMascot( 'listening' );
-		}
-	} );
-	textarea.addEventListener( 'blur', function () {
-		if ( ! sending && ! welcomeTimer ) {
-			setChatMascot( 'idle' );
-		}
-	} );
+	// กำลังพิมพ์อยู่ = ท่า listening, ออกจากช่องพิมพ์ = กลับ idle (chatPose() เช็ค activeElement ให้เอง)
+	textarea.addEventListener( 'focus', syncMascots );
+	textarea.addEventListener( 'blur', syncMascots );
 
 	document.addEventListener( 'keydown', function ( e ) {
-		if ( 'Escape' === e.key && root.classList.contains( 'is-open' ) ) {
+		if ( 'Escape' !== e.key ) {
+			return;
+		}
+		if ( isOpen() ) {
 			closeWidget();
+		} else if ( root.classList.contains( 'has-bubble' ) ) {
+			// กด Esc ขณะ focus อยู่ในบอลลูน — ต้องคืน focus ให้ปุ่มลอยเหมือนปุ่ม × ไม่งั้น focus หลุดไปที่ body
+			var focusInBubble = bubble.contains( document.activeElement );
+			dismissBubble();
+			if ( focusInBubble ) {
+				toggleBtn.focus();
+			}
 		}
 	} );
 
@@ -670,7 +862,14 @@
 
 		sending = true;
 		sendBtn.disabled = true;
-		setChatMascot( 'thinking' );
+		var answered = false;
+		waitPose = 'searching';
+		clearTimeout( waitTimer );
+		waitTimer = setTimeout( function () {
+			waitPose = 'thinking';
+			syncMascots();
+		}, WAIT_THINKING_MS );
+		syncMascots();
 
 		var headers = { 'Content-Type': 'application/json' };
 		if ( config.nonce ) {
@@ -714,6 +913,7 @@
 				safeSet( STORAGE_CONVERSATION, conversationId );
 				appendMessage( 'bot', data.answer || '' );
 				attachActions( data.answer || '', data.message_id || '' );
+				answered = true;
 			} )
 			.catch( function () {
 				typing.remove();
@@ -722,7 +922,16 @@
 			.finally( function () {
 				sending = false;
 				sendBtn.disabled = false;
-				setChatMascot( document.activeElement === textarea ? 'listening' : 'idle' );
+				clearTimeout( waitTimer );
+				if ( ! answered ) {
+					syncMascots();
+					return;
+				}
+				flashChatMascot( 'welcome' );
+				if ( ! isOpen() ) {
+					// ผู้ใช้ปิดหน้าต่างแชทไประหว่างรอ — ให้ mascot เรียกกลับมาอ่านคำตอบ (ค้างไว้จนกว่าจะเปิด/กดปิด)
+					showBubble( config.i18n.answerReady, 'welcome' );
+				}
 			} );
 	}
 } )();

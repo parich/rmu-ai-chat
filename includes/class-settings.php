@@ -53,6 +53,11 @@ class RMU_AI_Chat_Settings {
 			'privacy_notice_text'    => self::default_privacy_notice(),
 			'privacy_consent_label'  => 'ข้าพเจ้าได้อ่านและยินยอมรับทราบประกาศความเป็นส่วนตัวข้างต้นแล้ว',
 			'privacy_start_button'   => 'เริ่มการสนทนา',
+			'teaser_enabled'         => 1,
+			'teaser_delay'           => 3,
+			// ไม่ใส่ emoji ในค่าตั้งต้น — ฐานข้อมูลเก่าที่เป็น utf8 (ไม่ใช่ utf8mb4) เก็บตัวอักษร 4 byte ไม่ได้
+			// แล้ว $wpdb จะปฏิเสธการบันทึก option ทั้งก้อน กด "บันทึกการตั้งค่า" ช่องไหนก็ไม่ผ่าน
+			'teaser_messages'        => "[welcome] สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ?\n[searching] สงสัยเรื่องอีเมล VPN หรือการเข้าสู่ระบบของมหาวิทยาลัย ถามได้เลยค่ะ\n[listening] กดที่นี่เพื่อเริ่มแชทได้เลยค่ะ",
 		);
 	}
 
@@ -188,6 +193,7 @@ class RMU_AI_Chat_Settings {
 		add_settings_section( 'rmu_aic_section_connection', __( 'การเชื่อมต่อ Dify', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
 		add_settings_section( 'rmu_aic_section_limits', __( 'ขีดจำกัดการใช้งาน', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
 		add_settings_section( 'rmu_aic_section_display', __( 'การแสดงผล', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
+		add_settings_section( 'rmu_aic_section_mascot', __( 'Mascot และบอลลูนคำพูด', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
 		add_settings_section( 'rmu_aic_section_privacy', __( 'ประกาศความเป็นส่วนตัวก่อนเริ่มแชท', 'rmu-ai-chat' ), '__return_false', 'rmu-ai-chat' );
 
 		add_settings_field( 'enabled', __( 'เปิดใช้งานแชท', 'rmu-ai-chat' ), array( $this, 'field_enabled' ), 'rmu-ai-chat', 'rmu_aic_section_connection' );
@@ -205,6 +211,10 @@ class RMU_AI_Chat_Settings {
 		add_settings_field( 'icon_position', __( 'ตำแหน่งไอคอนแชท', 'rmu-ai-chat' ), array( $this, 'field_icon_position' ), 'rmu-ai-chat', 'rmu_aic_section_display' );
 		add_settings_field( 'icon_offset', __( 'ระยะห่างจากขอบจอ (px)', 'rmu-ai-chat' ), array( $this, 'field_icon_offset' ), 'rmu-ai-chat', 'rmu_aic_section_display' );
 		add_settings_field( 'excluded_pages', __( 'ไม่แสดงผลในหน้า (Page) เหล่านี้', 'rmu-ai-chat' ), array( $this, 'field_excluded_pages' ), 'rmu-ai-chat', 'rmu_aic_section_display' );
+
+		add_settings_field( 'teaser_enabled', __( 'บอลลูนคำพูดชวนคุย', 'rmu-ai-chat' ), array( $this, 'field_teaser_enabled' ), 'rmu-ai-chat', 'rmu_aic_section_mascot' );
+		add_settings_field( 'teaser_delay', __( 'เวลารอก่อนบอลลูนขึ้น', 'rmu-ai-chat' ), array( $this, 'field_teaser_delay' ), 'rmu-ai-chat', 'rmu_aic_section_mascot' );
+		add_settings_field( 'teaser_messages', __( 'ข้อความในบอลลูน', 'rmu-ai-chat' ), array( $this, 'field_teaser_messages' ), 'rmu-ai-chat', 'rmu_aic_section_mascot' );
 
 		add_settings_field( 'privacy_notice_enabled', __( 'บังคับยอมรับก่อนเริ่มแชท', 'rmu-ai-chat' ), array( $this, 'field_privacy_notice_enabled' ), 'rmu-ai-chat', 'rmu_aic_section_privacy' );
 		add_settings_field( 'privacy_notice_title', __( 'หัวข้อประกาศ', 'rmu-ai-chat' ), array( $this, 'field_privacy_notice_title' ), 'rmu-ai-chat', 'rmu_aic_section_privacy' );
@@ -254,6 +264,10 @@ class RMU_AI_Chat_Settings {
 		$output['privacy_notice_text']    = sanitize_textarea_field( $input['privacy_notice_text'] ?? '' );
 		$output['privacy_consent_label']  = sanitize_text_field( $input['privacy_consent_label'] ?? '' );
 		$output['privacy_start_button']   = sanitize_text_field( $input['privacy_start_button'] ?? '' );
+
+		$output['teaser_enabled']  = ! empty( $input['teaser_enabled'] ) ? 1 : 0;
+		$output['teaser_delay']    = min( 60, max( 0, absint( $input['teaser_delay'] ?? 3 ) ) );
+		$output['teaser_messages'] = sanitize_textarea_field( $input['teaser_messages'] ?? '' );
 
 		return $output;
 	}
@@ -417,6 +431,39 @@ class RMU_AI_Chat_Settings {
 			);
 		}
 		echo '</select><p class="description">' . esc_html__( 'กด Ctrl (หรือ Cmd บน Mac) ค้างไว้เพื่อเลือกหลายหน้า', 'rmu-ai-chat' ) . '</p>';
+	}
+
+	public function field_teaser_enabled() {
+		$options = self::get_options();
+		printf(
+			'<label><input type="checkbox" name="%s" value="1" %s /> %s</label><p class="description">%s</p>',
+			esc_attr( $this->name( 'teaser_enabled' ) ),
+			checked( 1, $options['teaser_enabled'], false ),
+			esc_html__( 'ให้ mascot ทักผู้ใช้ด้วยบอลลูนคำพูดเหนือไอคอนแชท', 'rmu-ai-chat' ),
+			esc_html__( 'แสดงทีละข้อความจนครบแล้วหายไปเอง — ขึ้นครั้งเดียวต่อแท็บเบราว์เซอร์ ผู้ใช้กดปิดได้', 'rmu-ai-chat' )
+		);
+	}
+
+	public function field_teaser_delay() {
+		$options = self::get_options();
+		printf(
+			'<input type="number" min="0" max="60" step="1" name="%s" value="%s" class="small-text" /> %s<p class="description">%s</p>',
+			esc_attr( $this->name( 'teaser_delay' ) ),
+			esc_attr( $options['teaser_delay'] ),
+			esc_html__( 'วินาที', 'rmu-ai-chat' ),
+			esc_html__( 'นับจากตอนโหลดหน้าเว็บ (0 = ขึ้นทันที, สูงสุด 60) — ถ้าผู้ใช้เปิดหน้าต่างแชทก่อนครบเวลา บอลลูนจะไม่ขึ้น', 'rmu-ai-chat' )
+		);
+	}
+
+	public function field_teaser_messages() {
+		$options = self::get_options();
+		printf(
+			'<textarea class="large-text" rows="4" name="%s">%s</textarea><p class="description">%s<br />%s</p>',
+			esc_attr( $this->name( 'teaser_messages' ) ),
+			esc_textarea( $options['teaser_messages'] ),
+			esc_html__( 'หนึ่งข้อความต่อบรรทัด ใส่ชื่อท่าของ mascot ในวงเล็บเหลี่ยมนำหน้าเพื่อเลือกท่าได้ (ไม่ระบุ = [welcome], ถ้าสะกดชื่อท่าผิดจะแสดงวงเล็บนั้นเป็นข้อความตามที่พิมพ์)', 'rmu-ai-chat' ),
+			esc_html__( 'ท่าที่มี: [welcome] ทักทาย, [searching] ถือแว่นขยาย, [listening] ฟัง, [thinking] คิด, [idle] ยืนปกติ', 'rmu-ai-chat' )
+		);
 	}
 
 	public function field_privacy_notice_enabled() {
